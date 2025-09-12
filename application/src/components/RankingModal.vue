@@ -90,73 +90,92 @@ watch(() => props.show, (newVal) => {
 
 .modal-content {
   background: var(--color-white);
-  padding: 30px;
-  border-radius: 10px;
+  padding: 40px;
+  border-radius: 15px;
   width: 90%;
-  max-width: 600px;
+  max-width: 700px;
   position: relative;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-  animation: slideIn 0.3s ease-out;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .modal-content h2 {
-  color: var(--color-primary-dark);
-  margin-bottom: 20px;
-  font-size: 2em;
+  color: var(--color-primary);
+  margin-bottom: 30px;
+  font-size: 2.8em;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
 .close-button {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 15px;
+  right: 15px;
   background: none;
   border: none;
-  font-size: 28px;
+  font-size: 32px;
   cursor: pointer;
-  color: var(--color-text-light);
-  transition: color 0.3s ease;
+  color: var(--color-text);
+  transition: color 0.3s ease, transform 0.3s ease;
 }
 
 .close-button:hover {
-  color: var(--color-text);
+  color: var(--color-primary);
+  transform: rotate(90deg);
 }
 
 .loading-message,
 .error-message {
   padding: 20px;
-  font-size: 1.1em;
-  color: var(--color-text-light);
+  font-size: 1.2em;
+  color: var(--color-text);
 }
 
 .error-message {
-  color: var(--color-error);
+  color: #F44336;
 }
 
 .ranking-table {
   width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 30px;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .ranking-table th,
 .ranking-table td {
-  border: 1px solid var(--color-border);
-  padding: 12px 8px;
+  border: none;
+  padding: 15px 10px;
   text-align: left;
+  color: var(--color-text);
 }
 
 .ranking-table th {
-  background-color: var(--color-background);
-  color: var(--color-primary-dark);
+  background-color: var(--color-white);
+  color: var(--color-primary);
   font-weight: 700;
+  font-size: 1.1em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ranking-table tbody tr {
+  background-color: var(--color-white);
+  transition: background-color 0.3s ease;
 }
 
 .ranking-table tbody tr:nth-child(odd) {
-  background-color: var(--color-background-light);
+  background-color: #f7f7f7;
 }
 
 .ranking-table tbody tr:hover {
-  background-color: var(--color-background-hover);
+  background-color: #efefef;
+  cursor: pointer;
+  color: var(--color-primary);
 }
 
 /* Animations */
@@ -166,7 +185,7 @@ watch(() => props.show, (newVal) => {
 }
 
 @keyframes slideIn {
-  from { transform: translateY(-50px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: translateY(-80px) scale(0.9); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 </style>

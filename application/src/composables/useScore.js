@@ -19,7 +19,7 @@ export function useScore() {
   }
 
   function addCorrect(elapsedMs, cardId) {
-    const baseScore = Math.max(0, GAME_CONFIG.K / elapsedMs);
+    const baseScore = Math.max(0, GAME_CONFIG.K / Math.pow(elapsedMs, 2));
     const comboBonus = 1 + combo.value * GAME_CONFIG.COMBO_BONUS_STEP;
     const finalScore = baseScore * comboBonus;
 

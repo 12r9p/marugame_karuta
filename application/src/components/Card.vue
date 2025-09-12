@@ -96,6 +96,8 @@ watch(() => props.animState, (newState) => {
 });
 
 const onClick = () => {
+  console.log('Card clicked:', props.card);
+  console.log('Card ID:', props.card.id);
   // The parent now controls clickability via the animState.
   // This component just needs to emit its ID.
   emit('card-clicked', props.card.id);
@@ -108,7 +110,7 @@ const onClick = () => {
   width: 150px; /* 仮のサイズ */
   height: 200px; /* 仮のサイズ */
   background-color: var(--color-white);
-  border: 2px solid var(--color-primary-dark);
+  border: 2px solid var(--color-primary);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
@@ -124,8 +126,13 @@ const onClick = () => {
 }
 
 .card:hover {
-  border-color: var(--color-accent);
+  background-color: #F5F2E9;
+  border-color: #A50F29;
   transform: translateY(-5px);
+}
+
+.card:hover .card-text {
+  color: var(--color-primary);
 }
 
 .card-text {

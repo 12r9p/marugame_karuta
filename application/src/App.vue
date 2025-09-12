@@ -5,6 +5,9 @@
     <header class="game-header">
       <h1 class="game-title">丸亀カルタ</h1>
       <div class="score-display" v-if="isGameActive">Score: {{ Math.round(score) }}</div>
+      <transition name="fade-up">
+        <div v-if="showFloatingScore" class="floating-score">+{{ floatingScore }}</div>
+      </transition>
       <div class="player-info">
         <span class="player-name">👤 {{ playerName }}</span>
         <button @click="showNicknameModal = true" class="edit-button">編集</button>
@@ -62,10 +65,6 @@
       </template>
     </main>
 
-    <footer class="game-footer" v-if="!isGameActive">
-      <button @click="showRankingModal = true" class="ranking-button shadow-md">🏆 ランキング</button>
-    </footer>
-
     <!-- Nickname Modal -->
     <div v-if="showNicknameModal" class="modal-overlay" @click.self="showNicknameModal = false">
       <div class="modal-content shadow-md rounded-lg">
@@ -113,6 +112,8 @@ const nextCardTimeout = ref(null);
 const isBestScore = ref(false); 
 const isTransitioningToNextRound = ref(false);
 const showMistakeFeedback = ref(false); 
+const floatingScore = ref(0);
+const showFloatingScore = ref(false); 
 
 const showRankingModal = ref(false);
 const showNicknameModal = ref(false);
@@ -215,7 +216,14 @@ const handleCardClick = (cardId) => {
   if (cardId === correctCardId.value) {
     // --- CORRECT ---
     isTransitioningToNextRound.value = true; // Lock the board
-    addCorrect(elapsed, cardId);
+    const finalScore = addCorrect(elapsed, cardId);
+    console.log('returnedScore from addCorrect:', finalScore); // ログ出力
+    floatingScore.value = Math.round(finalScore);
+    console.log('floatingScore.value after Math.round:', floatingScore.value); // ログ出力
+    showFloatingScore.value = true;
+    setTimeout(() => {
+      showFloatingScore.value = false;
+    }, GAME_CONFIG.FLOATING_SCORE_DURATION);
     clickedCard.animState = 'correct_flying';
     clickedCard.isTaken = true;
 
@@ -266,6 +274,7 @@ const startGame = () => {
   isGameActive.value = true;
   gameEnded.value = false;
   resetScore();
+  reactionStartTime.value = 0; // Add this line
   loadCards();
   gameStarted.value = true;
 };
@@ -292,6 +301,7 @@ const endGame = () => {
 const restartGame = () => {
   gameEnded.value = false;
   resetScore();
+  reactionStartTime.value = 0; // Add this line
   loadCards(); 
   gameStarted.value = true;
 };
@@ -352,7 +362,6 @@ onMounted(() => {
 <style>
 /* Global Styles */
 #app {
-  font-family: 'Noto Sans JP', 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
@@ -364,13 +373,14 @@ onMounted(() => {
 }
 
 .game-header {
-  background-color: var(--color-primary);
-  color: var(--color-white);
+  background-color: var(--color-header-footer);
+  color: var(--color-text);
   padding: 15px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative; /* Add this line */
 }
 
 .game-title {
@@ -396,34 +406,36 @@ onMounted(() => {
 
 .edit-button {
   background-color: var(--color-white);
-  color: var(--color-primary);
-  border: none;
+  color: var(--color-text);
+  border: 2px solid var(--color-primary);
   padding: 5px 10px;
   border-radius: 5px;
   cursor: pointer;
   font-size: 0.9em;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .edit-button:hover {
-  background-color: #f0f0f0;
+  background-color: #F5F2E9;
+  color: var(--color-primary);
 }
 
 .header-action-button {
-  background-color: var(--color-accent);
+  background-color: var(--color-white);
   color: var(--color-text);
-  border: none;
+  border: 2px solid var(--color-primary);
   padding: 5px 15px;
   border-radius: 5px;
   cursor: pointer;
   font-size: 1em;
   font-weight: bold;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
   margin-left: 20px; /* Adjust as needed */
 }
 
 .header-action-button:hover {
-  opacity: 0.9;
+  background-color: #F5F2E9;
+  color: var(--color-primary);
 }
 
 .game-main {
@@ -469,45 +481,48 @@ onMounted(() => {
 }
 
 .audio-controls button {
-  background-color: var(--color-primary);
-  color: var(--color-white);
-  border: none;
+  background-color: var(--color-white);
+  color: var(--color-text);
+  border: 2px solid var(--color-primary);
   padding: 10px 20px;
   border-radius: 5px;
   font-size: 1.1em;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .audio-controls button:hover:not(:disabled) {
-  background-color: var(--color-primary-dark);
+  background-color: #F5F2E9;
+  color: var(--color-primary);
 }
 
 .audio-controls button:disabled {
-  background-color: var(--color-text-light);
+  background-color: #999;
   cursor: not-allowed;
+  color: var(--color-white);
 }
 
 .game-footer {
   padding: 15px 20px;
-  background-color: var(--color-primary-dark);
-  color: var(--color-white);
+  background-color: var(--color-header-footer);
+  color: var(--color-text);
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .ranking-button {
-  background-color: var(--color-accent);
+  background-color: var(--color-white);
   color: var(--color-text);
-  border: none;
+  border: 2px solid var(--color-primary);
   padding: 10px 20px;
   border-radius: 5px;
   font-size: 1.1em;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .ranking-button:hover {
-  background-color: #FFB300;
+  background-color: #F5F2E9;
+  color: var(--color-primary);
 }
 
 /* Modal Styles */
@@ -535,7 +550,7 @@ onMounted(() => {
 }
 
 .modal-content h2 {
-  color: var(--color-primary-dark);
+  color: var(--color-primary);
   margin-bottom: 20px;
 }
 
@@ -548,18 +563,19 @@ onMounted(() => {
 }
 
 .modal-content button {
-  background-color: var(--color-primary);
-  color: var(--color-white);
-  border: none;
+  background-color: var(--color-white);
+  color: var(--color-text);
+  border: 2px solid var(--color-primary);
   padding: 10px 20px;
   border-radius: 5px;
   cursor: pointer;
   margin: 0 5px;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .modal-content button:hover {
-  background-color: var(--color-primary-dark);
+  background-color: #F5F2E9;
+  color: var(--color-primary);
 }
 
 /* Top Screen Styles */
@@ -572,7 +588,7 @@ onMounted(() => {
 }
 
 .top-screen h2 {
-  color: var(--color-primary-dark);
+  color: var(--color-text);
   font-size: 2.5em;
   margin-bottom: 40px;
 }
@@ -586,96 +602,133 @@ onMounted(() => {
 
 /* Game Result Styles */
 .game-result {
-  background-color: var(--color-white);
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  background: var(--color-white);
+  padding: 50px;
+  border-radius: 15px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
   text-align: center;
-  max-width: 500px;
+  max-width: 600px;
   width: 100%;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  animation: fadeInScale 0.5s ease-out;
 }
 
 .game-result h2 {
-  color: var(--color-primary-dark);
-  margin-bottom: 20px;
+  color: var(--color-primary);
+  margin-bottom: 30px;
+  font-size: 3em;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
 .game-result p {
-  font-size: 1.2em;
-  margin-bottom: 10px;
+  font-size: 1.3em;
+  margin-bottom: 15px;
+  color: var(--color-text);
 }
 
 .result-score {
-  font-size: 1.8em;
+  font-size: 3.5em;
   font-weight: bold;
-  color: var(--color-accent);
+  color: var(--color-primary);
+  display: inline-block;
+  margin: 20px 0;
+  animation: scorePop 0.8s ease-out;
 }
 
 .best-score-message {
-  color: var(--color-accent);
+  color: var(--color-primary);
   font-weight: bold;
-  font-size: 1.3em;
-  margin-top: 15px;
+  font-size: 1.6em;
+  margin-top: 25px;
+  animation: pulse 1.5s infinite alternate;
 }
 
 .taken-cards-display {
-  margin-top: 30px;
-  border-top: 1px solid #eee;
-  padding-top: 20px;
+  margin-top: 40px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 30px;
 }
 
 .taken-cards-display h3 {
-  color: var(--color-primary-dark);
-  margin-bottom: 15px;
+  color: var(--color-primary);
+  margin-bottom: 20px;
+  font-size: 1.8em;
 }
 
 .taken-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 15px;
   justify-content: center;
 }
 
 .taken-card-item {
-  background-color: var(--color-background);
-  border: 1px solid var(--color-primary-dark);
-  border-radius: 5px;
-  padding: 5px;
+  background-color: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Zen Old Mincho', 'Shippori Mincho', serif; /* フォント変更 */
-  font-weight: 700; /* 太字 */
-  font-size: 0.8em;
-  line-height: 1.2;
+  font-family: 'Zen Old Mincho', 'Shippori Mincho', serif;
+  font-weight: 700;
+  font-size: 0.9em;
+  line-height: 1.3;
   white-space: normal;
   word-break: normal;
-  writing-mode: vertical-rl; /* 縦書き */
-  text-orientation: upright; /* 文字の向き */
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .result-actions {
-  margin-top: 30px;
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
 }
 
 .action-button {
-  background-color: var(--color-primary);
-  color: var(--color-white);
-  border: none;
-  padding: 12px 25px;
-  border-radius: 5px;
-  font-size: 1.1em;
+  background-color: var(--color-white);
+  color: var(--color-text);
+  border: 2px solid var(--color-primary);
+  padding: 15px 30px;
+  border-radius: 8px;
+  font-size: 1.2em;
   cursor: pointer;
-  margin: 0 10px;
-  transition: background-color 0.3s ease;
+  font-weight: bold;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
 }
 
 .action-button.primary {
-  background-color: var(--color-info);
 }
 
 .action-button:hover {
-  opacity: 0.9;
+  background-color: #F5F2E9;
+  color: var(--color-primary);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* New Animations for Game Result */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes scorePop {
+  0% { transform: scale(0.5); opacity: 0; }
+  70% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 /* Mistake Feedback Overlay */
@@ -714,5 +767,27 @@ onMounted(() => {
 .transition-overlay.is-active {
   opacity: 1;
   pointer-events: auto; /* Block clicks when active */
+}
+
+.floating-score {
+  position: absolute;
+  top: 50%; /* Adjust as needed */
+  left: 50%; /* Adjust as needed */
+  transform: translate(-50%, -50%);
+  font-size: 2em;
+  font-weight: bold;
+  color: var(--color-primary);
+  pointer-events: none; /* Allow clicks to pass through */
+  z-index: 100;
+}
+
+/* Transition styles */
+.fade-up-enter-active, .fade-up-leave-active {
+  transition: all 0.8s ease-out;
+}
+
+.fade-up-enter-from, .fade-up-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -100%); /* Move up */
 }
 </style>

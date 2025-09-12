@@ -1,16 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700&display=swap');
+
 :root {
-  --color-primary: #C91333; /* Marugame Red */
-  --color-primary-dark: #A50F29;
-  --color-accent: #FFC107; /* Gold */
-  --color-background: #FAF8F0; /* Warm Off-white */
-  --color-text: #001f3f; /* Navy Blue */
-  --color-text-light: #555555;
+  --color-primary: #C91432; /* Marugame Red */
+  --color-background: #FCF7EF; /* Beige */
+  --color-text: #45413D; /* Black */
   --color-white: #FFFFFF;
-  --color-error: #F44336;
-  --color-info: #2196F3;
   --color-border: #DDDDDD;
-  --color-background-light: #FDFCF7;
-  --color-background-hover: #F5F2E9;
+  --color-header-footer: #F0EAD6;
 }
 
 /* Basic Reset */
@@ -18,7 +14,8 @@ body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Noto Sans JP', 'Roboto', sans-serif;
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-weight: 700;
   color: var(--color-text);
   background-color: var(--color-background);
 }
