@@ -1,0 +1,20 @@
+{
+  "name": "marugame_karuta_root",
+  "version": "1.0.0",
+  "description": "Marugame Karuta Application",
+  "main": "index.js",
+  "scripts": {
+    "start": "cd application && npm run dev",
+    "start-server": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@notionhq/client": "^5.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0"
+  }
+}

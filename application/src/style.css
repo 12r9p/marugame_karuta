@@ -1,0 +1,36 @@
+:root {
+  --color-primary: #4CAF50; /* Green */
+  --color-primary-dark: #388E3C;
+  --color-accent: #FFC107; /* Amber */
+  --color-background: #E8F5E9; /* Light Green */
+  --color-text: #212121;
+  --color-text-light: #757575;
+  --color-white: #FFFFFF;
+  --color-error: #F44336;
+  --color-info: #2196F3;
+}
+
+/* Basic Reset */
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Noto Sans JP', 'Roboto', sans-serif;
+  color: var(--color-text);
+  background-color: var(--color-background);
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Utility Classes */
+.shadow-md {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.rounded-lg {
+  border-radius: 8px;
+}
