@@ -6,5 +6,4 @@ export const GAME_CONFIG = {
   PENALTY: 50000,                 // 減点
   COMBO_BONUS_STEP: 1.5,         // 1コンボごとの倍率アップ
   FLOATING_SCORE_DURATION: 800,  // フローティングスコアの表示時間 (ms)
-  ENABLE_AUDIO: false,            // 音声再生を有効にするか
 };

@@ -40,7 +40,7 @@
           />
         </div>
 
-        <div class="audio-controls" v-if="GAME_CONFIG.ENABLE_AUDIO">
+        <div class="audio-controls" v-if="isAudioEnabled">
           <button @click="playAudio" :disabled="isAudioPlaying || !currentCard" class="action-button primary">▶</button>
           <button @click="stopAudio" :disabled="!isAudioPlaying" class="action-button">❚❚</button>
           <audio ref="audioPlayer" @ended="onAudioEnded" @play="onAudioPlay" @pause="onAudioPause"></audio>
@@ -82,6 +82,18 @@
         <div class="setting-item">
           <label for="debugModeToggle">デバッグモード</label>
           <input type="checkbox" id="debugModeToggle" v-model="isDebugMode" />
+        </div>
+        <div class="setting-item">
+          <label for="skipOnMistakeToggle">不正解時に次へスキップ</label>
+          <input type="checkbox" id="skipOnMistakeToggle" v-model="skipOnMistake" />
+        </div>
+        <div class="setting-item">
+          <label for="audioEnabledToggle">音声の有効/無効</label>
+          <input type="checkbox" id="audioEnabledToggle" v-model="isAudioEnabled" />
+        </div>
+        <div class="setting-item">
+          <label for="audioVolumeSlider">音量: {{ Math.round(audioVolume * 100) }}%</label>
+          <input type="range" id="audioVolumeSlider" min="0" max="1" step="0.01" v-model="audioVolume" />
         </div>
         <button @click="saveSettingsAndCloseModal" class="action-button primary">閉じる</button>
       </div>
@@ -150,6 +162,9 @@ const showSettingsModal = ref(false);
 const playerName = ref('名無し');
 const newPlayerName = ref('');
 const isDebugMode = ref(false);
+const skipOnMistake = ref(false); // 新しい設定: 不正解時に次へスキップ
+const audioVolume = ref(1.0); // 音量 (0.0 - 1.0)
+const isAudioEnabled = ref(true); // 音声の有効/無効
 
 const { score, combo, totalCorrect, totalMistake, reactionTimes, takenCardIds, resetScore, addCorrect, addMistake } = useScore();
 
@@ -181,7 +196,7 @@ const loadCards = async () => {
   // karutaData.js からデータを読み込む
   const initialCards = karutaData.map(item => ({
     id: item.id,
-    audio: GAME_CONFIG.ENABLE_AUDIO ? `/audio/audio${parseInt(item.id, 10)}.mp3` : null, // IDからオーディオパスを生成 (音声無効時はnull)
+    audio: isAudioEnabled.value ? `/audio/audio${parseInt(item.id, 10)}.mp3` : null, // IDからオーディオパスを生成 (音声無効時はnull)
   }));
 
   allCardsData.value = initialCards; 
@@ -207,17 +222,18 @@ const shuffleCards = () => {
 };
 
 const playAudio = () => {
-  if (!GAME_CONFIG.ENABLE_AUDIO) {
+  if (!isAudioEnabled.value) { // Use new setting
     return;
   }
   if (currentCard.value && audioPlayer.value) {
     audioPlayer.value.src = currentCard.value.audio;
+    audioPlayer.value.volume = audioVolume.value; // Set volume
     audioPlayer.value.play();
   }
 };
 
 const stopAudio = () => {
-  if (!GAME_CONFIG.ENABLE_AUDIO) return;
+  if (!isAudioEnabled.value) return; // Use new setting
   if (audioPlayer.value) {
     audioPlayer.value.pause();
     audioPlayer.value.currentTime = 0;
@@ -348,7 +364,7 @@ const startGame = () => {
   reactionStartTime.value = 0;
   loadCards();
   gameStarted.value = true;
-  if (GAME_CONFIG.ENABLE_AUDIO) {
+  if (isAudioEnabled.value) { // Use new setting
     nextTick(() => {
       playAudio();
     });
@@ -389,7 +405,7 @@ const goHome = () => {
   isGameActive.value = false;
   gameEnded.value = false;
   gameStarted.value = false;
-  if (GAME_CONFIG.ENABLE_AUDIO) {
+  if (isAudioEnabled.value) { // Use new setting
     stopAudio();
   }
   resetScore();
@@ -430,6 +446,9 @@ const saveNickname = () => {
 
 const saveSettingsAndCloseModal = () => {
   setCookie('isDebugMode', isDebugMode.value);
+  setCookie('skipOnMistake', skipOnMistake.value); // 新しい設定を保存
+  setCookie('audioVolume', audioVolume.value); // 音量を保存
+  setCookie('isAudioEnabled', isAudioEnabled.value); // 音声有効/無効を保存
   showSettingsModal.value = false;
 };
 
@@ -446,6 +465,16 @@ onMounted(() => {
   const savedDebugMode = getCookie('isDebugMode');
   if (savedDebugMode !== null) {
     isDebugMode.value = savedDebugMode === 'true';
+  }
+
+  const savedAudioVolume = getCookie('audioVolume');
+  if (savedAudioVolume !== null) {
+    audioVolume.value = parseFloat(savedAudioVolume);
+  }
+
+  const savedIsAudioEnabled = getCookie('isAudioEnabled');
+  if (savedIsAudioEnabled !== null) {
+    isAudioEnabled.value = savedIsAudioEnabled === 'true';
   }
 
   // submitScoresToRanking(); // サーバーが動いていないためコメントアウト
