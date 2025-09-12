@@ -27,7 +27,7 @@
 
       <template v-else-if="!gameEnded">
         <div class="current-reading shadow-md rounded-lg" v-if="currentCard">
-          <p>{{ currentCard.text }}</p>
+          <p>{{ currentSubtitle }}</p>
         </div>
 
         <div class="card-grid">
@@ -40,7 +40,7 @@
           />
         </div>
 
-        <div class="audio-controls">
+        <div class="audio-controls" v-if="GAME_CONFIG.ENABLE_AUDIO">
           <button @click="playAudio" :disabled="isAudioPlaying || !currentCard" class="action-button primary">▶</button>
           <button @click="stopAudio" :disabled="!isAudioPlaying" class="action-button">❚❚</button>
           <audio ref="audioPlayer" @ended="onAudioEnded" @play="onAudioPlay" @pause="onAudioPause"></audio>
@@ -75,27 +75,54 @@
       </div>
     </div>
 
-    <!-- Settings Modal (Placeholder) -->
-    <div v-if="showSettingsModal" class="modal-overlay" @click.self="showSettingsModal = false">
+    <!-- Settings Modal -->
+    <div v-if="showSettingsModal" class="modal-overlay" @click.self="saveSettingsAndCloseModal">
       <div class="modal-content shadow-md rounded-lg">
         <h2>設定</h2>
-        <p>ここにゲーム設定項目が入ります。</p>
-        <button @click="showSettingsModal = false" class="action-button primary">閉じる</button>
+        <div class="setting-item">
+          <label for="debugModeToggle">デバッグモード</label>
+          <input type="checkbox" id="debugModeToggle" v-model="isDebugMode" />
+        </div>
+        <button @click="saveSettingsAndCloseModal" class="action-button primary">閉じる</button>
       </div>
-    
     </div>
 
     <RankingModal :show="showRankingModal" @update:show="showRankingModal = $event" />
+
+    <!-- Debug Info Overlay -->
+    <div v-if="isDebugMode" class="debug-overlay">
+      <h3>Debug Info</h3>
+      <p>Subtitle Time: {{ (GAME_CONFIG.ENABLE_AUDIO ? currentSubtitleTime : simulatedTime).toFixed(2) }}s</p>
+      <p>Score: {{ Math.round(score) }}</p>
+      <p>Combo: {{ combo }}</p>
+      <p>Reaction Time: {{ currentReactionTime.toFixed(0) }}ms</p>
+      <p>Current Card ID: {{ currentCard ? currentCard.id : 'N/A' }}</p>
+      <p>Correct Card ID: {{ correctCardId ? correctCardId : 'N/A' }}</p>
+      <p>Audio Playing: {{ isAudioPlaying }}</p>
+      <p>Transitioning: {{ isTransitioningToNextRound }}</p>
+      <p>Total Correct: {{ totalCorrect }}</p>
+      <p>Total Mistake: {{ totalMistake }}</p>
+      <p>Reaction Times Recorded: {{ reactionTimes.length }}</p>
+      <h4>Score Formula:</h4>
+      <p>Base Score = max(0, K / (elapsedMs^2))</p>
+      <p>Combo Bonus = 1 + Combo * COMBO_BONUS_STEP</p>
+      <p>Final Score = Base Score * Combo Bonus</p>
+      <p>K: {{ GAME_CONFIG.K }}</p>
+      <p>COMBO_BONUS_STEP: {{ GAME_CONFIG.COMBO_BONUS_STEP }}</p>
+      <p>PENALTY: {{ GAME_CONFIG.PENALTY }}</p>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch, nextTick } from 'vue';
 import Card from './components/Card.vue';
 import RankingModal from './components/RankingModal.vue';
 import { useScore } from './composables/useScore';
 import { getCookie, setCookie } from './composables/useCookie';
 import { GAME_CONFIG } from './config/gameConfig';
+import { karutaData } from './data/karutaData.js'; // karutaDataをインポート
+import { useSubtitle } from './composables/useSubtitle.js'; // useSubtitle をインポート
 
 // --- State --- 
 const cards = ref([]); // 現在表示されている札データ（ゲーム中に減っていく）
@@ -105,6 +132,8 @@ const correctCardId = ref(null);
 const isAudioPlaying = ref(false);
 const audioPlayer = ref(null);
 const reactionStartTime = ref(0);
+const currentReactionTime = ref(0); // リアルタイム反応時間
+const reactionTimeAnimationId = ref(null); // requestAnimationFrame ID
 const gameStarted = ref(false);
 const gameEnded = ref(false); 
 const isGameActive = ref(false); 
@@ -120,8 +149,18 @@ const showNicknameModal = ref(false);
 const showSettingsModal = ref(false); 
 const playerName = ref('名無し');
 const newPlayerName = ref('');
+const isDebugMode = ref(false);
 
 const { score, combo, totalCorrect, totalMistake, reactionTimes, takenCardIds, resetScore, addCorrect, addMistake } = useScore();
+
+// useSubtitle の初期化
+const currentCardFullText = computed(() => {
+  if (!currentCard.value) return '';
+  const karuta = karutaData.find(item => item.id === currentCard.value.id);
+  return karuta ? karuta.full : ''; // ここで全文を渡す
+});
+
+const { currentSubtitle, updateSubtitle, currentSubtitleTime, simulatedTime } = useSubtitle(audioPlayer, currentCardFullText);
 
 // --- Computed --- 
 const averageReactionTime = computed(() => {
@@ -130,20 +169,21 @@ const averageReactionTime = computed(() => {
   return sum / reactionTimes.value.length;
 });
 
+// currentReadingText は不要になるので削除または変更
+// const currentReadingText = computed(() => {
+//   if (!currentCard.value) return '';
+//   const karuta = karutaData.find(item => item.id === currentCard.value.id);
+//   return karuta ? karuta.full : '';
+// });
+
 // --- Methods --- 
 const loadCards = async () => {
-  const initialCards = [
-    { id: '1', text: '秋の田の かりほの庵の 苫をあらみ わが衣手は 露にぬれつつ', audio: '/audio/audio1.mp3' },
-    { id: '2', text: '春過ぎて 夏来にけらし 白妙の 衣ほすてふ 天の香具山', audio: '/audio/audio2.mp3' },
-    { id: '3', text: 'あしびきの 山鳥の尾の しだり尾の ながながし夜を ひとりかも寝む', audio: '/audio/audio3.mp3' },
-    { id: '4', text: '田子の浦に うち出でてみれば 白妙の 富士の高嶺に 雪は降りつつ', audio: '/audio/audio4.mp3' },
-    { id: '5', text: '奥山に 紅葉踏み分け 鳴く鹿の 声聞く時ぞ 秋は悲しき', audio: '/audio/audio5.mp3' },
-    { id: '6', text: 'かささぎの 渡せる橋に おく霜の 白きを見れば 夜ぞ更けにける', audio: '/audio/audio6.mp3' },
-    { id: '7', text: '天の原 ふりさけ見れば 春日なる 三笠の山に 出でし月かも', audio: '/audio/audio7.mp3' },
-    { id: '8', text: 'わが庵は 都のたつみ しかぞ住む 世をうぢ山と 人はいふなり', audio: '/audio/audio8.mp3' },
-    { id: '9', text: '花の色は 移りにけりな いたづらに わが身世にふる ながめせしまに', audio: '/audio/audio9.mp3' },
-    { id: '10', text: 'これやこの 行くも帰るも 別れては 知るも知らぬも 逢坂の関', audio: '/audio/audio10.mp3' },
-  ];
+  // karutaData.js からデータを読み込む
+  const initialCards = karutaData.map(item => ({
+    id: item.id,
+    audio: GAME_CONFIG.ENABLE_AUDIO ? `/audio/audio${parseInt(item.id, 10)}.mp3` : null, // IDからオーディオパスを生成 (音声無効時はnull)
+  }));
+
   allCardsData.value = initialCards; 
   cards.value = initialCards.map(card => ({ 
     ...card, 
@@ -167,6 +207,9 @@ const shuffleCards = () => {
 };
 
 const playAudio = () => {
+  if (!GAME_CONFIG.ENABLE_AUDIO) {
+    return;
+  }
   if (currentCard.value && audioPlayer.value) {
     audioPlayer.value.src = currentCard.value.audio;
     audioPlayer.value.play();
@@ -174,6 +217,7 @@ const playAudio = () => {
 };
 
 const stopAudio = () => {
+  if (!GAME_CONFIG.ENABLE_AUDIO) return;
   if (audioPlayer.value) {
     audioPlayer.value.pause();
     audioPlayer.value.currentTime = 0;
@@ -183,18 +227,24 @@ const stopAudio = () => {
 const onAudioPlay = () => {
   isAudioPlaying.value = true;
   reactionStartTime.value = performance.now();
+  startReactionTimeTracking(); // トラッキング開始
   if (nextCardTimeout.value) {
     clearTimeout(nextCardTimeout.value);
     nextCardTimeout.value = null;
   }
+  updateSubtitle(0); // ここを修正: 0を渡す
+  console.log('onAudioPlay: audioPlayer.value.src', audioPlayer.value.src);
+  console.log('onAudioPlay: audioPlayer.value.readyState', audioPlayer.value.readyState);
 };
 
 const onAudioPause = () => {
   isAudioPlaying.value = false;
+  stopReactionTimeTracking(); // トラッキング停止
 };
 
 const onAudioEnded = () => {
   isAudioPlaying.value = false;
+  stopReactionTimeTracking(); // トラッキング停止
   nextCardTimeout.value = setTimeout(() => {
     moveToNextCard();
   }, GAME_CONFIG.NEXT_DELAY_MS);
@@ -215,6 +265,7 @@ const handleCardClick = (cardId) => {
 
   if (cardId === correctCardId.value) {
     // --- CORRECT ---
+    stopReactionTimeTracking(); // トラッキング停止
     isTransitioningToNextRound.value = true; // Lock the board
     const finalScore = addCorrect(elapsed, cardId);
     console.log('returnedScore from addCorrect:', finalScore); // ログ出力
@@ -234,7 +285,9 @@ const handleCardClick = (cardId) => {
       }
     });
 
-    stopAudio();
+    if (GAME_CONFIG.ENABLE_AUDIO) {
+      stopAudio();
+    }
     // Wait for all animations (fly away + return) to safely finish
     const safeDelay = GAME_CONFIG.ANIMATION_DURATION_MS + 1000; 
     setTimeout(() => {
@@ -254,6 +307,21 @@ const handleCardClick = (cardId) => {
   }
 };
 
+const startReactionTimeTracking = () => {
+  const update = () => {
+    currentReactionTime.value = performance.now() - reactionStartTime.value;
+    reactionTimeAnimationId.value = requestAnimationFrame(update);
+  };
+  reactionTimeAnimationId.value = requestAnimationFrame(update);
+};
+
+const stopReactionTimeTracking = () => {
+  if (reactionTimeAnimationId.value) {
+    cancelAnimationFrame(reactionTimeAnimationId.value);
+    reactionTimeAnimationId.value = null;
+  }
+};
+
 const moveToNextCard = () => {
   // Reset animation states for the new round
   cards.value.forEach(c => {
@@ -266,6 +334,9 @@ const moveToNextCard = () => {
   }
   shuffleCards();
 
+  reactionStartTime.value = performance.now(); // 新しい札の読み上げ開始時間を記録
+  startReactionTimeTracking(); // 新しい札の反応時間計測を開始
+
   // Unlock the board for the new round
   isTransitioningToNextRound.value = false;
 };
@@ -274,9 +345,17 @@ const startGame = () => {
   isGameActive.value = true;
   gameEnded.value = false;
   resetScore();
-  reactionStartTime.value = 0; // Add this line
+  reactionStartTime.value = 0;
   loadCards();
   gameStarted.value = true;
+  if (GAME_CONFIG.ENABLE_AUDIO) {
+    nextTick(() => {
+      playAudio();
+    });
+  } else {
+    // 音声が無効な場合でもタイマーを開始するためにonAudioPlayのロジックを直接実行
+    onAudioPlay();
+  }
 };
 
 const endGame = () => {
@@ -295,7 +374,7 @@ const endGame = () => {
   unsentScores.push({ nickname: playerName.value, score: score.value, date: new Date().toISOString() });
   setCookie('unsentScores', JSON.stringify(unsentScores));
 
-  submitScoresToRanking();
+  // submitScoresToRanking(); // サーバーが動いていないためコメントアウト
 };
 
 const restartGame = () => {
@@ -310,11 +389,15 @@ const goHome = () => {
   isGameActive.value = false;
   gameEnded.value = false;
   gameStarted.value = false;
-  stopAudio();
+  if (GAME_CONFIG.ENABLE_AUDIO) {
+    stopAudio();
+  }
   resetScore();
   cards.value = []; 
   allCardsData.value = []; 
 };
+
+const API_BASE_URL = 'http://localhost:3000'; // APIのベースURL
 
 const submitScoresToRanking = async () => {
   let unsentScores = JSON.parse(getCookie('unsentScores') || '[]');
@@ -322,7 +405,7 @@ const submitScoresToRanking = async () => {
 
   for (const entry of unsentScores) {
     try {
-      const response = await fetch('/api/score', {
+      const response = await fetch(`${API_BASE_URL}/api/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ player: entry.nickname, score: entry.score, timestamp: entry.date }),
@@ -345,6 +428,11 @@ const saveNickname = () => {
   showNicknameModal.value = false;
 };
 
+const saveSettingsAndCloseModal = () => {
+  setCookie('isDebugMode', isDebugMode.value);
+  showSettingsModal.value = false;
+};
+
 // --- Lifecycle Hooks --- 
 onMounted(() => {
   const savedPlayerName = getCookie('playerName');
@@ -355,8 +443,14 @@ onMounted(() => {
   }
   newPlayerName.value = playerName.value;
 
-  submitScoresToRanking();
+  const savedDebugMode = getCookie('isDebugMode');
+  if (savedDebugMode !== null) {
+    isDebugMode.value = savedDebugMode === 'true';
+  }
+
+  // submitScoresToRanking(); // サーバーが動いていないためコメントアウト
 });
+
 </script>
 
 <style>
@@ -789,5 +883,34 @@ onMounted(() => {
 .fade-up-enter-from, .fade-up-leave-to {
   opacity: 0;
   transform: translate(-50%, -100%); /* Move up */
+}
+
+.debug-overlay {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 0.8em;
+  text-align: left;
+  z-index: 2000;
+}
+
+.debug-overlay h3 {
+  margin-top: 0;
+  margin-bottom: 5px;
+  color: #4CAF50;
+}
+
+.debug-overlay p {
+  margin: 2px 0;
+}
+
+.debug-overlay h4 {
+  margin-top: 10px;
+  margin-bottom: 5px;
+  color: #FFC107;
 }
 </style>

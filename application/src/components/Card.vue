@@ -5,13 +5,16 @@
     :class="{ 'is-visually-taken': isVisuallyTaken }"
     @click="onClick"
   >
-    <p class="card-text">{{ card.text }}</p>
+    <div class="card-content">
+      <p class="lower-text">{{ karutaInfo.shimonoku }}</p>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { GAME_CONFIG } from '../config/gameConfig';
+import { karutaData } from '../data/karutaData.js'; // 新しいデータをインポート
 
 const props = defineProps({
   card: Object,
@@ -23,6 +26,11 @@ const emit = defineEmits(['card-clicked']);
 const cardElement = ref(null);
 const isVisuallyTaken = ref(false);
 const currentAnimation = ref(null);
+
+// card.id に基づいて karutaData から対応する歌を見つける
+const karutaInfo = computed(() => {
+  return karutaData.find(item => item.id === props.card.id) || { full: '', shimonoku: '' };
+});
 
 // --- Animation Logic ---
 
@@ -120,9 +128,7 @@ const onClick = () => {
   padding: 10px; /* テキストの余白 */
   transition: transform GAME_CONFIG.ANIMATION_DURATION_MS + 'ms ease-out, opacity ' + GAME_CONFIG.ANIMATION_DURATION_MS + 'ms ease-out, border-color 0.3s ease';
   will-change: transform, opacity;
-  /* 縦書き設定 */
-  writing-mode: vertical-rl;
-  text-orientation: upright;
+  /* 縦書き設定は下の句にのみ適用 */
 }
 
 .card:hover {
@@ -131,11 +137,17 @@ const onClick = () => {
   transform: translateY(-5px);
 }
 
-.card:hover .card-text {
-  color: var(--color-primary);
+.card-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  width: 100%;
+  padding: 5px;
+  box-sizing: border-box;
 }
 
-.card-text {
+.lower-text {
   font-family: 'Zen Old Mincho', 'Shippori Mincho', serif; /* 明朝体 */
   font-size: clamp(1em, 4vw, 1.5em); /* 自動調整 */
   line-height: 1.4; /* 行間 */
@@ -144,6 +156,13 @@ const onClick = () => {
   margin: 0;
   color: var(--color-text);
   font-weight: 700; /* 太字 */
+  writing-mode: vertical-rl; /* 下の句は縦書き */
+  text-orientation: upright;
+  text-align: center;
+  flex-grow: 2; /* 下部に配置、全文より大きく */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .card.is-animating {
