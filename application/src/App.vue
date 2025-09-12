@@ -1,5 +1,7 @@
 <template>
   <div id="app">
+    <div class="transition-overlay" :class="{ 'is-active': isTransitioningToNextRound }"></div>
+    <div class="mistake-feedback-overlay" :class="{ 'is-active': showMistakeFeedback }"></div>
     <header class="game-header">
       <h1 class="game-title">丸亀カルタ</h1>
       <div class="score-display" v-if="isGameActive">Score: {{ Math.round(score) }}</div>
@@ -7,6 +9,7 @@
         <span class="player-name">👤 {{ playerName }}</span>
         <button @click="showNicknameModal = true" class="edit-button">編集</button>
       </div>
+      <button v-if="isGameActive && !gameEnded" @click="goHome" class="header-action-button">トップへ戻る</button>
     </header>
 
     <main class="game-main">
@@ -29,8 +32,7 @@
             v-for="card in cards"
             :key="card.id"
             :card="card"
-            :is-correct="card.id === correctCardId && card.isTaken"
-            :is-mistake="card.id !== correctCardId && card.isTaken"
+            :anim-state="card.animState"
             @card-clicked="handleCardClick"
           />
         </div>
@@ -51,15 +53,6 @@
           <p>お手つき数: {{ totalMistake }}</p>
           <p v-if="isBestScore" class="best-score-message">✨ 自己ベスト更新！</p>
 
-          <div class="taken-cards-display">
-            <h3>取った札</h3>
-            <div class="taken-cards-grid">
-              <div v-for="cardId in takenCardIds" :key="cardId" class="taken-card-item">
-                <p>{{ allCardsData.find(c => c.id === cardId)?.text }}</p>
-              </div>
-            </div>
-          </div>
-
           <div class="result-actions">
             <button @click="restartGame" class="action-button primary shadow-md">もう一度プレイ</button>
             <button @click="showRankingModal = true" class="action-button shadow-md">ランキングを見る</button>
@@ -69,7 +62,7 @@
       </template>
     </main>
 
-    <footer class="game-footer">
+    <footer class="game-footer" v-if="!isGameActive">
       <button @click="showRankingModal = true" class="ranking-button shadow-md">🏆 ランキング</button>
     </footer>
 
@@ -118,6 +111,8 @@ const gameEnded = ref(false);
 const isGameActive = ref(false); 
 const nextCardTimeout = ref(null);
 const isBestScore = ref(false); 
+const isTransitioningToNextRound = ref(false);
+const showMistakeFeedback = ref(false); 
 
 const showRankingModal = ref(false);
 const showNicknameModal = ref(false);
@@ -149,7 +144,11 @@ const loadCards = async () => {
     { id: '10', text: 'これやこの 行くも帰るも 別れては 知るも知らぬも 逢坂の関', audio: '/audio/audio10.mp3' },
   ];
   allCardsData.value = initialCards; 
-  cards.value = initialCards.map(card => ({ ...card, isTaken: false })); 
+  cards.value = initialCards.map(card => ({ 
+    ...card, 
+    isTaken: false,
+    animState: 'default', // default | correct_flying | mistake_flying | returning
+  })); 
   shuffleCards();
 };
 
@@ -201,34 +200,66 @@ const onAudioEnded = () => {
 };
 
 const handleCardClick = (cardId) => {
-  if (!gameStarted.value || !currentCard.value) return;
+  // Ignore all clicks if transitioning between rounds
+  if (isTransitioningToNextRound.value) {
+    return;
+  }
+
+  const clickedCard = cards.value.find(c => c.id === cardId);
+  if (!clickedCard || clickedCard.isTaken || clickedCard.animState !== 'default') {
+    return;
+  }
 
   const elapsed = performance.now() - reactionStartTime.value;
-  const clickedCard = cards.value.find(card => card.id === cardId);
 
   if (cardId === correctCardId.value) {
-    const addedScore = addCorrect(elapsed, cardId); 
+    // --- CORRECT ---
+    isTransitioningToNextRound.value = true; // Lock the board
+    addCorrect(elapsed, cardId);
+    clickedCard.animState = 'correct_flying';
     clickedCard.isTaken = true;
+
+    // Tell incorrect cards to return
+    cards.value.forEach(c => {
+      if (c.animState === 'mistake_flying') {
+        c.animState = 'returning';
+      }
+    });
+
     stopAudio();
-    moveToNextCard();
-  } else {
-    const deductedScore = addMistake(elapsed);
-    clickedCard.isMistake = true;
+    // Wait for all animations (fly away + return) to safely finish
+    const safeDelay = GAME_CONFIG.ANIMATION_DURATION_MS + 1000; 
     setTimeout(() => {
-      clickedCard.isMistake = false;
-      clickedCard.isTaken = true;
       moveToNextCard();
-    }, GAME_CONFIG.ANIMATION_DURATION_MS);
-    stopAudio();
+    }, safeDelay);
+
+  } else {
+    // --- INCORRECT ---
+    addMistake(elapsed);
+    clickedCard.animState = 'mistake_flying';
+
+    // Trigger visual feedback
+    showMistakeFeedback.value = true;
+    setTimeout(() => {
+      showMistakeFeedback.value = false;
+    }, 700); // Duration of the flash effect
   }
 };
 
 const moveToNextCard = () => {
+  // Reset animation states for the new round
+  cards.value.forEach(c => {
+    c.animState = 'default';
+  });
+
   if (nextCardTimeout.value) {
     clearTimeout(nextCardTimeout.value);
     nextCardTimeout.value = null;
   }
   shuffleCards();
+
+  // Unlock the board for the new round
+  isTransitioningToNextRound.value = false;
 };
 
 const startGame = () => {
@@ -378,6 +409,23 @@ onMounted(() => {
   background-color: #f0f0f0;
 }
 
+.header-action-button {
+  background-color: var(--color-accent);
+  color: var(--color-text);
+  border: none;
+  padding: 5px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+  margin-left: 20px; /* Adjust as needed */
+}
+
+.header-action-button:hover {
+  opacity: 0.9;
+}
+
 .game-main {
   flex-grow: 1;
   padding: 20px;
@@ -389,18 +437,19 @@ onMounted(() => {
 
 .current-reading {
   background-color: var(--color-white);
-  padding: 15px 25px;
+  padding: 20px 30px;
   margin-bottom: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  font-size: 1.2em;
-  min-height: 60px;
+  font-size: 1.5em;
+  min-height: auto;
+  width: 80%;
+  max-width: 800px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  writing-mode: vertical-rl; /* 縦書き */
-  text-orientation: upright; /* 文字の向き */
+  line-height: 1.5;
 }
 
 .card-grid {
@@ -627,5 +676,43 @@ onMounted(() => {
 
 .action-button:hover {
   opacity: 0.9;
+}
+
+/* Mistake Feedback Overlay */
+.mistake-feedback-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Allows clicks to go through */
+  background: radial-gradient(circle, rgba(220, 20, 60, 0) 0%, rgba(220, 20, 60, 0.3) 80%, rgba(220, 20, 60, 0.5) 100%);
+  opacity: 0;
+  z-index: 2000; /* On top of everything */
+  transition: opacity 0.5s ease-out;
+}
+
+.mistake-feedback-overlay.is-active {
+  opacity: 1;
+  transition: opacity 0.1s ease-in;
+}
+
+/* Transition Overlay */
+.transition-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-out;
+  z-index: 1500; /* Above cards, below modals */
+}
+
+.transition-overlay.is-active {
+  opacity: 1;
+  pointer-events: auto; /* Block clicks when active */
 }
 </style>

@@ -1,13 +1,16 @@
 :root {
-  --color-primary: #4CAF50; /* Green */
-  --color-primary-dark: #388E3C;
-  --color-accent: #FFC107; /* Amber */
-  --color-background: #E8F5E9; /* Light Green */
-  --color-text: #212121;
-  --color-text-light: #757575;
+  --color-primary: #C91333; /* Marugame Red */
+  --color-primary-dark: #A50F29;
+  --color-accent: #FFC107; /* Gold */
+  --color-background: #FAF8F0; /* Warm Off-white */
+  --color-text: #001f3f; /* Navy Blue */
+  --color-text-light: #555555;
   --color-white: #FFFFFF;
   --color-error: #F44336;
   --color-info: #2196F3;
+  --color-border: #DDDDDD;
+  --color-background-light: #FDFCF7;
+  --color-background-hover: #F5F2E9;
 }
 
 /* Basic Reset */

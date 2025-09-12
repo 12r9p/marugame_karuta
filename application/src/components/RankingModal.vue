@@ -140,7 +140,7 @@ watch(() => props.show, (newVal) => {
 
 .ranking-table th,
 .ranking-table td {
-  border: 1px solid #eee;
+  border: 1px solid var(--color-border);
   padding: 12px 8px;
   text-align: left;
 }
@@ -152,11 +152,11 @@ watch(() => props.show, (newVal) => {
 }
 
 .ranking-table tbody tr:nth-child(odd) {
-  background-color: #f9f9f9;
+  background-color: var(--color-background-light);
 }
 
 .ranking-table tbody tr:hover {
-  background-color: #f0f0f0;
+  background-color: var(--color-background-hover);
 }
 
 /* Animations */

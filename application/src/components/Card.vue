@@ -2,7 +2,7 @@
   <div
     ref="cardElement"
     class="card shadow-md rounded-lg"
-    :class="{ 'is-taken': isTaken }"
+    :class="{ 'is-visually-taken': isVisuallyTaken }"
     @click="onClick"
   >
     <p class="card-text">{{ card.text }}</p>
@@ -15,53 +15,90 @@ import { GAME_CONFIG } from '../config/gameConfig';
 
 const props = defineProps({
   card: Object,
-  isCorrect: Boolean,
-  isMistake: Boolean,
+  animState: String, // default | correct_flying | mistake_flying | returning
 });
 
 const emit = defineEmits(['card-clicked']);
 
-const cardElement = ref(null); // テンプレート参照
-const isTaken = ref(false);
+const cardElement = ref(null);
+const isVisuallyTaken = ref(false);
+const currentAnimation = ref(null);
 
-const ANIMATION_END_DELAY = GAME_CONFIG.ANIMATION_DURATION_MS + 50; // アニメーション終了後少し待つ
+// --- Animation Logic ---
 
-watch(() => props.isCorrect, (newVal) => {
-  if (newVal && cardElement.value) {
-    const animation = cardElement.value.animate([
-      { transform: 'translate(0px, 0px) scale(1) rotate(0deg)' },
-      { transform: 'translate(120vw, 0px) scale(1.1) rotate(0deg)' } 
-    ], {
-      duration: GAME_CONFIG.ANIMATION_DURATION_MS,
-      easing: 'ease-out',
-      fill: 'forwards'
-    });
-    animation.onfinish = () => {
-      isTaken.value = true;
-    };
+const playAnimation = (keyframes, options) => {
+  if (currentAnimation.value) {
+    currentAnimation.value.cancel();
   }
-});
+  currentAnimation.value = cardElement.value.animate(keyframes, options);
+  return currentAnimation.value;
+};
 
-watch(() => props.isMistake, (newVal) => {
-  if (newVal && cardElement.value) {
-    const animation = cardElement.value.animate([
-      { transform: 'translate(0px, 0px) scale(1) rotate(0deg)' },
-      { transform: 'translate(-120vw, 0px) scale(1.1) rotate(0deg)' } 
-    ], {
-      duration: GAME_CONFIG.ANIMATION_DURATION_MS,
-      easing: 'ease-out',
-      fill: 'forwards'
-    });
-    animation.onfinish = () => {
-      isTaken.value = true;
-    };
+const getFlyAwayKeyframes = (isCorrect) => {
+  const cardIdNum = parseInt(props.card.id, 10);
+  let directionX, rotation;
+
+  if (isCorrect) {
+    directionX = cardIdNum % 2 === 0 ? '150vw' : '-150vw';
+    rotation = cardIdNum % 2 === 0 ? '30deg' : '-30deg';
+  } else {
+    directionX = cardIdNum % 2 === 0 ? '90vw' : '-90vw';
+    rotation = cardIdNum % 2 === 0 ? '5deg' : '-5deg';
+  }
+
+  return [
+    { transform: 'translate(0, 0) scale(1)', opacity: 1, visibility: 'visible' },
+    { transform: `translate(${directionX}, -150px) scale(0.4) rotate(${rotation})`, opacity: 0, visibility: 'visible' }
+  ];
+};
+
+// --- State Machine Watcher ---
+
+watch(() => props.animState, (newState) => {
+  switch (newState) {
+    case 'correct_flying': {
+      cardElement.value.classList.add('is-animating');
+      const anim = playAnimation(getFlyAwayKeyframes(true), {
+        duration: GAME_CONFIG.ANIMATION_DURATION_MS,
+        easing: 'ease-in',
+        fill: 'forwards'
+      });
+      anim.onfinish = () => {
+        isVisuallyTaken.value = true;
+      };
+      break;
+    }
+    case 'mistake_flying': {
+      cardElement.value.classList.add('is-animating');
+      playAnimation(getFlyAwayKeyframes(false), {
+        duration: GAME_CONFIG.ANIMATION_DURATION_MS,
+        easing: 'ease-out',
+        fill: 'forwards'
+      });
+      break;
+    }
+    case 'returning': {
+      const returnAnim = playAnimation(
+        [...getFlyAwayKeyframes(false)].reverse(),
+        {
+          duration: GAME_CONFIG.ANIMATION_DURATION_MS,
+          easing: 'ease-out',
+          fill: 'forwards'
+        }
+      );
+      returnAnim.onfinish = () => {
+        cardElement.value.classList.remove('is-animating');
+        currentAnimation.value = null;
+      };
+      break;
+    }
   }
 });
 
 const onClick = () => {
-  if (!isTaken.value) {
-    emit('card-clicked', props.card.id);
-  }
+  // The parent now controls clickability via the animState.
+  // This component just needs to emit its ID.
+  emit('card-clicked', props.card.id);
 };
 </script>
 
@@ -102,9 +139,12 @@ const onClick = () => {
   font-weight: 700; /* 太字 */
 }
 
-.card.is-taken {
-  opacity: 0;
-  pointer-events: none;
+.card.is-animating {
+  z-index: 100;
+}
+
+.card.is-visually-taken {
+  visibility: hidden;
 }
 
 @keyframes shake {
