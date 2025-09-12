@@ -795,6 +795,7 @@ onMounted(() => {
   font-weight: bold;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
+  font-family: 'Zen Old Mincho', 'Shippori Mincho', serif; /* Added Mincho font */
 }
 
 .action-button.primary {
