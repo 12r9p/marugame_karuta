@@ -63,7 +63,17 @@ const getFlyAwayKeyframes = (isCorrect) => {
 // --- State Machine Watcher ---
 
 watch(() => props.animState, (newState) => {
+  console.log(`Card ${props.card.id}: animState changed to ${newState}`);
   switch (newState) {
+    case 'default': {
+      isVisuallyTaken.value = false; // カードをデフォルト状態に戻す
+      if (cardElement.value) {
+        cardElement.value.style.visibility = 'visible'; // 強制的に表示
+      }
+      cardElement.value.classList.remove('is-animating');
+      currentAnimation.value = null;
+      break;
+    }
     case 'correct_flying': {
       cardElement.value.classList.add('is-animating');
       const anim = playAnimation(getFlyAwayKeyframes(true), {
@@ -78,11 +88,15 @@ watch(() => props.animState, (newState) => {
     }
     case 'mistake_flying': {
       cardElement.value.classList.add('is-animating');
-      playAnimation(getFlyAwayKeyframes(false), {
+      const anim = playAnimation(getFlyAwayKeyframes(false), {
         duration: GAME_CONFIG.ANIMATION_DURATION_MS,
         easing: 'ease-out',
         fill: 'forwards'
       });
+      anim.onfinish = () => {
+        isVisuallyTaken.value = true; // アニメーション完了後に非表示にする
+        cardElement.value.classList.remove('is-animating');
+      };
       break;
     }
     case 'returning': {

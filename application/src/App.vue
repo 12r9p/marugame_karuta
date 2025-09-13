@@ -52,10 +52,9 @@
           />
         </div>
 
-        <div class="audio-controls" v-if="isAudioEnabled">
-          <button @click="playAudio" :disabled="isAudioPlaying || !currentCard" class="action-button primary">▶</button>
-          <button @click="stopAudio" :disabled="!isAudioPlaying" class="action-button">❚❚</button>
-          <audio ref="audioPlayer" @ended="onAudioEnded" @play="onAudioPlay" @pause="onAudioPause"></audio>
+        <div class="audio-controls">
+          <button @click="skipQuestion" :disabled="isTransitioningToNextRound" class="action-button">スキップ</button>
+          <audio ref="audioPlayer" @ended="onAudioEnded" @play="onAudioPlay" @pause="onAudioPause" v-if="isAudioEnabled"></audio>
         </div>
       </template>
 
@@ -116,6 +115,17 @@
     </div>
 
     <RankingModal :show="showRankingModal" @update:show="showRankingModal = $event" />
+
+    <!-- Score Nickname Modal -->
+    <div v-if="showScoreNicknameModal" class="modal-overlay">
+      <div class="modal-content shadow-md rounded-lg">
+        <h2>スコアの保存</h2>
+        <p>このスコアを保存するためのニックネームを入力してください。</p>
+        <input v-model="scoreNickname" placeholder="今回のニックネーム" />
+        <button @click="saveScoreWithNickname" class="action-button primary">スコアを保存</button>
+        <button @click="showScoreNicknameModal = false" class="action-button">保存しない</button>
+      </div>
+    </div>
 
     <!-- Notification Overlay -->
     <transition name="fade">
@@ -196,6 +206,10 @@ const audioVolume = ref(1.0); // 音量 (0.0 - 1.0)
 const isAudioEnabled = ref(true); // 音声の有効/無効
 const saveNicknameSetting = ref(true); // 新しい設定: ニックネームを保存するかどうか
 
+const showScoreNicknameModal = ref(false);
+const scoreNickname = ref('');
+const tempScoreData = ref(null);
+
 const currentLogoSrc = computed(() => {
   // ヘッダーの背景色を取得
   const headerBgColor = getComputedStyle(document.documentElement).getPropertyValue('--color-header-footer').trim();
@@ -248,16 +262,18 @@ const loadCards = async () => {
   cards.value = initialCards.map(card => ({ 
     ...card, 
     isTaken: false,
+    isDealt: false, // リセット時に出題済みフラグもリセット
     animState: 'default', // default | correct_flying | mistake_flying | returning
   })); 
   shuffleCards();
 };
 
 const shuffleCards = () => {
-  const availableCards = cards.value.filter(card => !card.isTaken);
+  const availableCards = cards.value.filter(card => !card.isTaken && !card.isDealt);
   if (availableCards.length > 0) {
     const randomIndex = Math.floor(Math.random() * availableCards.length);
     currentCard.value = availableCards[randomIndex];
+    currentCard.value.isDealt = true; // 出題済みに設定
     correctCardId.value = currentCard.value.id;
   } else {
     currentCard.value = null;
@@ -313,9 +329,22 @@ const onAudioPause = () => {
 const onAudioEnded = () => {
   isAudioPlaying.value = false;
   stopReactionTimeTracking(); // トラッキング停止
+
+  // Lock the board and prepare for transition
+  isTransitioningToNextRound.value = true;
+
+  // Find any cards that were incorrectly selected and tell them to return
+  cards.value.forEach(c => {
+    if (c.animState === 'mistake_flying') {
+      c.animState = 'returning';
+    }
+  });
+
+  // Use a safe delay to allow for the returning animation before moving to the next card
+  const safeDelay = 1000; // Similar to the delay used for a correct answer
   nextCardTimeout.value = setTimeout(() => {
     moveToNextCard();
-  }, GAME_CONFIG.NEXT_DELAY_MS);
+  }, safeDelay);
 };
 
 const handleCardClick = (cardId) => {
@@ -372,7 +401,59 @@ const handleCardClick = (cardId) => {
     setTimeout(() => {
       showMistakeFeedback.value = false;
     }, 700); // Duration of the flash effect
+
+    // 不正解時にスキップする設定が有効な場合、次のカードへ進む
+    if (skipOnMistake.value) {
+      isTransitioningToNextRound.value = true; // Lock the board
+
+      if (GAME_CONFIG.ENABLE_AUDIO) {
+        stopAudio();
+      }
+
+      // Wait for the mistake animation to play out
+      setTimeout(() => {
+        // Now, tell the card to return
+        clickedCard.animState = 'returning';
+
+        // Wait for the return animation to finish, then move to the next card
+        setTimeout(() => {
+          moveToNextCard();
+        }, 1000); // Delay for return animation
+
+      }, GAME_CONFIG.ANIMATION_DURATION_MS + 100);
+    }
   }
+};
+
+const skipQuestion = () => {
+  // Don't allow skipping if already transitioning
+  if (isTransitioningToNextRound.value) {
+    return;
+  }
+
+  // Stop the current audio
+  if (isAudioPlaying.value) {
+    stopAudio();
+  }
+
+  // Stop reaction time tracking
+  stopReactionTimeTracking();
+
+  // Lock the board and prepare for transition
+  isTransitioningToNextRound.value = true;
+
+  // Find any cards that were incorrectly selected and tell them to return
+  cards.value.forEach(c => {
+    if (c.animState === 'mistake_flying') {
+      c.animState = 'returning';
+    }
+  });
+
+  // Use a safe delay to allow for the returning animation
+  const safeDelay = 1000;
+  nextCardTimeout.value = setTimeout(() => {
+    moveToNextCard();
+  }, safeDelay);
 };
 
 const startReactionTimeTracking = () => {
@@ -391,9 +472,12 @@ const stopReactionTimeTracking = () => {
 };
 
 const moveToNextCard = () => {
-  // Reset animation states for the new round
+  // Reset animation states for the new round (only for untaken cards)
   cards.value.forEach(c => {
-    c.animState = 'default';
+    if (!c.isTaken) {
+      c.animState = 'default';
+      console.log(`moveToNextCard: Card ${c.id} animState set to default.`);
+    }
   });
 
   if (nextCardTimeout.value) {
@@ -436,30 +520,50 @@ const startGame = () => {
 
 const endGame = () => {
   gameStarted.value = false;
-  gameEnded.value = true; 
+  gameEnded.value = true;
 
+  // Stop audio and timers
+  if (isAudioEnabled.value) { stopAudio(); }
+  if (nextCardTimeout.value) { clearTimeout(nextCardTimeout.value); }
+
+  // Check for best score
   const best = parseFloat(getCookie('bestScore')) || 0;
   if (score.value > best) {
     setCookie('bestScore', score.value);
-    isBestScore.value = true; 
+    isBestScore.value = true;
   } else {
     isBestScore.value = false;
   }
 
+  // Conditionally save score or show modal
+  if (saveNicknameSetting.value) {
+    // Nickname saving is ON - save score directly
+    let unsentScores = JSON.parse(getCookie('unsentScores') || '[]');
+    unsentScores.push({ nickname: playerName.value, score: score.value, date: new Date().toISOString() });
+    setCookie('unsentScores', JSON.stringify(unsentScores));
+    submitScoresToRanking();
+  } else {
+    // Nickname saving is OFF - show popup to ask for a name for this score
+    tempScoreData.value = { score: score.value, date: new Date().toISOString() };
+    scoreNickname.value = ''; // Clear previous input
+    showScoreNicknameModal.value = true;
+  }
+};
+
+const saveScoreWithNickname = () => {
+  const nicknameToSave = scoreNickname.value.trim() || '名無し'; // Default to Anonymous if empty
   let unsentScores = JSON.parse(getCookie('unsentScores') || '[]');
-  unsentScores.push({ nickname: playerName.value, score: score.value, date: new Date().toISOString() });
+  unsentScores.push({
+    nickname: nicknameToSave,
+    score: tempScoreData.value.score,
+    date: tempScoreData.value.date
+  });
   setCookie('unsentScores', JSON.stringify(unsentScores));
+  submitScoresToRanking(); // Attempt to submit right away
 
-  submitScoresToRanking();
-
-  // ゲーム終了時のクリーンアップ
-  if (isAudioEnabled.value) {
-    stopAudio();
-  }
-  if (nextCardTimeout.value) {
-    clearTimeout(nextCardTimeout.value);
-    nextCardTimeout.value = null;
-  }
+  // Hide modal and clean up
+  showScoreNicknameModal.value = false;
+  tempScoreData.value = null;
 };
 
 const restartGame = () => {
@@ -502,7 +606,7 @@ const goHome = () => {
   showFloatingScore.value = false;
 };
 
-const API_BASE_URL = 'http://localhost:3000'; // APIのベースURL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'; // APIのベースURL
 
 const showNotificationMessage = (message) => {
   notificationMessage.value = message;
@@ -592,8 +696,27 @@ const saveSettingsAndCloseModal = () => {
   setCookie('audioVolume', audioVolume.value); // 音量を保存
   setCookie('isAudioEnabled', isAudioEnabled.value); // 音声有効/無効を保存
   setCookie('saveNicknameSetting', saveNicknameSetting.value); // ニックネーム保存設定を保存
+
+  // ユーザーがニックネームの保存を無効にした場合、直ちにクッキーを削除する
+  if (!saveNicknameSetting.value) {
+    setCookie('playerName', '', -1); // 有効期限を過去に設定してクッキーを削除
+  }
+
   showSettingsModal.value = false;
 };
+
+// --- Watchers ---
+watch(showNicknameModal, (isShown) => {
+  if (isShown) {
+    // When the modal opens, pre-fill the input.
+    // If the current name is the default, show an empty input for better UX.
+    if (playerName.value === '名無し') {
+      newPlayerName.value = '';
+    } else {
+      newPlayerName.value = playerName.value;
+    }
+  }
+});
 
 // --- Lifecycle Hooks --- 
 onMounted(() => {
@@ -603,7 +726,6 @@ onMounted(() => {
   } else {
     showNicknameModal.value = true;
   }
-  newPlayerName.value = playerName.value;
 
   const savedDebugMode = getCookie('isDebugMode');
   if (savedDebugMode !== null) {
@@ -626,8 +748,6 @@ onMounted(() => {
   }
 
   loadUnsentScores(); // 未送信スコアをロード
-
-  submitScoresToRanking();
 });
 
 </script>
