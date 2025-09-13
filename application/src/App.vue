@@ -1293,4 +1293,96 @@ onMounted(() => {
   border-color: #bd2130;
   color: white;
 }
+
+/* --- Settings Modal --- */
+.modal-content .setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 10px;
+  border-bottom: 1px solid var(--color-border, #eee);
+  text-align: left;
+}
+
+.modal-content .setting-item:last-of-type {
+  border-bottom: none;
+}
+
+.modal-content .setting-item label {
+  font-size: 1em;
+  color: var(--color-text-secondary, #333);
+}
+
+/* Custom Toggle Switch for Checkboxes */
+.setting-item input[type="checkbox"] {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #ccc;
+  border-radius: 20px;
+  transition: background 0.3s;
+  cursor: pointer;
+}
+
+.setting-item input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.setting-item input[type="checkbox"]:checked {
+  background: var(--color-primary);
+}
+
+.setting-item input[type="checkbox"]:checked::before {
+  transform: translateX(20px);
+}
+
+/* Custom Range Slider */
+.setting-item input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 140px;
+  height: 8px;
+  background: #ddd;
+  border-radius: 5px;
+  outline: none;
+  transition: opacity .2s;
+}
+
+.setting-item input[type="range"]:hover {
+  opacity: 1;
+}
+
+.setting-item input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--color-primary);
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.setting-item input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--color-primary);
+  cursor: pointer;
+  border-radius: 50%;
+  border: none;
+}
+
+.modal-content > .action-button {
+  margin-top: 30px;
+}
 </style>
