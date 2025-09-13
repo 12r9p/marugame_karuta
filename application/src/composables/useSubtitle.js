@@ -79,7 +79,7 @@ export function useSubtitle(audioPlayerRef, subtitleText) {
     }
 
     currentSubtitleTime.value = currentTime; // 時間を更新
-    console.log('updateSubtitle: currentTime', currentTime); // デバッグログ
+    //console.log('updateSubtitle: currentTime', currentTime); // デバッグログ
     let displayedText = '';
 
     for (let i = 0; i < parsedSubtitles.value.length; i++) {
@@ -91,7 +91,7 @@ export function useSubtitle(audioPlayerRef, subtitleText) {
       }
     }
     currentSubtitle.value = displayedText;
-    console.log('Displayed subtitle:', currentSubtitle.value); // デバッグログ
+    //console.log('Displayed subtitle:', currentSubtitle.value); // デバッグログ
   };
 
   // audioPlayerRef の currentTime が更新されるたびに字幕を更新

@@ -41,32 +41,47 @@ const loading = ref(false);
 const error = ref(null);
 
 const fetchRanking = async () => {
+  console.log('Fetching ranking data...');
   loading.value = true;
   error.value = null;
   try {
     const response = await fetch('/api/ranking');
     if (!response.ok) {
+      console.error(`API call failed with status: ${response.status}`);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
+    console.log('Ranking data fetched successfully:', data);
     ranking.value = data.results;
   } catch (e) {
+    console.error('Error fetching ranking:', e.message);
     error.value = e.message;
   } finally {
     loading.value = false;
+    console.log('Finished fetching ranking data.');
   }
 };
 
 const closeModal = () => {
+  console.log('Closing ranking modal.');
   emit('update:show', false);
 };
 
 const formatDate = (isoString) => {
+  if (!isoString) {
+    console.warn('formatDate received null or undefined isoString');
+    return 'N/A';
+  }
   const date = new Date(isoString);
+  if (isNaN(date.getTime())) {
+    console.error('Invalid Date received for formatting:', isoString);
+    return 'Invalid Date';
+  }
   return date.toLocaleString();
 };
 
 watch(() => props.show, (newVal) => {
+  console.log('props.show changed:', newVal);
   if (newVal) {
     fetchRanking();
   }

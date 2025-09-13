@@ -3,7 +3,7 @@
     <div class="transition-overlay" :class="{ 'is-active': isTransitioningToNextRound }"></div>
     <div class="mistake-feedback-overlay" :class="{ 'is-active': showMistakeFeedback }"></div>
     <header class="game-header">
-      <h1 class="game-title">丸亀カルタ</h1>
+      <img :src="currentLogoSrc" alt="丸亀カルタロゴ" class="game-logo">
       <div class="score-display" v-if="isGameActive">Score: {{ Math.round(score) }}</div>
       <transition name="fade-up">
         <div v-if="showFloatingScore" class="floating-score">+{{ floatingScore }}</div>
@@ -22,6 +22,18 @@
           <button @click="startGame" class="action-button primary shadow-md">ゲームスタート</button>
           <button @click="showRankingModal = true" class="action-button shadow-md">ランキングを見る</button>
           <button @click="showSettingsModal = true" class="action-button shadow-md">設定</button>
+
+          <!-- Unsent Scores Display -->
+          <div v-if="unsentScoresList.length > 0" class="unsent-scores-section shadow-md rounded-lg">
+            <h3>未送信スコア ({{ unsentScoresList.length }})</h3>
+            <ul>
+              <li v-for="(scoreEntry, index) in unsentScoresList" :key="index">
+                {{ scoreEntry.nickname }}: {{ Math.round(scoreEntry.score) }} ({{ new Date(scoreEntry.date).toLocaleString() }})
+              </li>
+            </ul>
+            <button @click="submitScoresToRanking" class="action-button primary">未送信スコアを送信</button>
+            <button @click="clearUnsentScores" class="action-button danger">未送信スコアを全て削除</button>
+          </div>
         </div>
       </template>
 
@@ -95,11 +107,22 @@
           <label for="audioVolumeSlider">音量: {{ Math.round(audioVolume * 100) }}%</label>
           <input type="range" id="audioVolumeSlider" min="0" max="1" step="0.01" v-model="audioVolume" />
         </div>
+        <div class="setting-item">
+          <label for="saveNicknameToggle">ニックネームを保存する</label>
+          <input type="checkbox" id="saveNicknameToggle" v-model="saveNicknameSetting" />
+        </div>
         <button @click="saveSettingsAndCloseModal" class="action-button primary">閉じる</button>
       </div>
     </div>
 
     <RankingModal :show="showRankingModal" @update:show="showRankingModal = $event" />
+
+    <!-- Notification Overlay -->
+    <transition name="fade">
+      <div v-if="showNotification" class="notification-overlay">
+        <p>{{ notificationMessage }}</p>
+      </div>
+    </transition>
 
     <!-- Debug Info Overlay -->
     <div v-if="isDebugMode" class="debug-overlay">
@@ -156,6 +179,12 @@ const showMistakeFeedback = ref(false);
 const floatingScore = ref(0);
 const showFloatingScore = ref(false); 
 
+const showNotification = ref(false);
+const notificationMessage = ref('');
+let notificationTimeoutId = null;
+
+const unsentScoresList = ref([]); // 未送信スコアを保持するリスト
+
 const showRankingModal = ref(false);
 const showNicknameModal = ref(false);
 const showSettingsModal = ref(false); 
@@ -165,6 +194,22 @@ const isDebugMode = ref(false);
 const skipOnMistake = ref(false); // 新しい設定: 不正解時に次へスキップ
 const audioVolume = ref(1.0); // 音量 (0.0 - 1.0)
 const isAudioEnabled = ref(true); // 音声の有効/無効
+const saveNicknameSetting = ref(true); // 新しい設定: ニックネームを保存するかどうか
+
+const currentLogoSrc = computed(() => {
+  // ヘッダーの背景色を取得
+  const headerBgColor = getComputedStyle(document.documentElement).getPropertyValue('--color-header-footer').trim();
+  console.log('Header background color:', headerBgColor); // ログを追加
+  // 背景色が白系（例: #ffffff, #f9f9f9 など）であれば黒ロゴ、そうでなければ白ロゴ
+  // ここでは簡易的に、背景色が明るい色かどうかで判断
+  const isLightBackground = headerBgColor === '#ffffff' || headerBgColor === '#f9f9f9' || headerBgColor === 'var(--color-white)' || headerBgColor === '#F0EAD6'; // 例
+
+  if (isLightBackground) {
+    return '/丸亀カルタロゴ黒.png';
+  } else {
+    return '/丸亀カルタロゴ.png';
+  }
+});
 
 const { score, combo, totalCorrect, totalMistake, reactionTimes, takenCardIds, resetScore, addCorrect, addMistake } = useScore();
 
@@ -228,7 +273,13 @@ const playAudio = () => {
   if (currentCard.value && audioPlayer.value) {
     audioPlayer.value.src = currentCard.value.audio;
     audioPlayer.value.volume = audioVolume.value; // Set volume
-    audioPlayer.value.play();
+
+    // 音声がロードされるまで待機
+    audioPlayer.value.oncanplaythrough = () => {
+      audioPlayer.value.play();
+      audioPlayer.value.oncanplaythrough = null; // イベントリスナーを一度だけ実行
+    };
+    audioPlayer.value.load(); // ロードを開始
   }
 };
 
@@ -249,6 +300,7 @@ const onAudioPlay = () => {
     nextCardTimeout.value = null;
   }
   updateSubtitle(0); // ここを修正: 0を渡す
+  console.log('onAudioPlay: updateSubtitle(0) called.');
   console.log('onAudioPlay: audioPlayer.value.src', audioPlayer.value.src);
   console.log('onAudioPlay: audioPlayer.value.readyState', audioPlayer.value.readyState);
 };
@@ -355,15 +407,23 @@ const moveToNextCard = () => {
 
   // Unlock the board for the new round
   isTransitioningToNextRound.value = false;
+
+  if (isAudioEnabled.value && currentCard.value) {
+    console.log('moveToNextCard: Attempting to play audio. currentCard.value:', currentCard.value);
+    playAudio(); // 新しいカードの音声を再生
+  }
+  console.log('moveToNextCard: currentCard.value after shuffleCards:', currentCard.value);
 };
 
 const startGame = () => {
+  console.log('startGame: Game started.');
   isGameActive.value = true;
   gameEnded.value = false;
   resetScore();
   reactionStartTime.value = 0;
   loadCards();
   gameStarted.value = true;
+  console.log('startGame: currentCard.value after loadCards and shuffleCards:', currentCard.value);
   if (isAudioEnabled.value) { // Use new setting
     nextTick(() => {
       playAudio();
@@ -390,15 +450,29 @@ const endGame = () => {
   unsentScores.push({ nickname: playerName.value, score: score.value, date: new Date().toISOString() });
   setCookie('unsentScores', JSON.stringify(unsentScores));
 
-  // submitScoresToRanking(); // サーバーが動いていないためコメントアウト
+  submitScoresToRanking();
+
+  // ゲーム終了時のクリーンアップ
+  if (isAudioEnabled.value) {
+    stopAudio();
+  }
+  if (nextCardTimeout.value) {
+    clearTimeout(nextCardTimeout.value);
+    nextCardTimeout.value = null;
+  }
 };
 
 const restartGame = () => {
-  gameEnded.value = false;
-  resetScore();
-  reactionStartTime.value = 0; // Add this line
-  loadCards(); 
-  gameStarted.value = true;
+  // ゲーム終了時のクリーンアップ処理
+  if (isAudioEnabled.value) {
+    stopAudio();
+  }
+  if (nextCardTimeout.value) {
+    clearTimeout(nextCardTimeout.value);
+    nextCardTimeout.value = null;
+  }
+  // startGame と同じ処理を実行
+  startGame();
 };
 
 const goHome = () => {
@@ -411,36 +485,104 @@ const goHome = () => {
   resetScore();
   cards.value = []; 
   allCardsData.value = []; 
+  loadUnsentScores(); // ホームに戻った時に未送信スコアを再読み込み
+
+  // ゲーム状態の完全なリセット
+  currentCard.value = null;
+  correctCardId.value = null;
+  isAudioPlaying.value = false;
+  stopReactionTimeTracking();
+  if (nextCardTimeout.value) {
+    clearTimeout(nextCardTimeout.value);
+    nextCardTimeout.value = null;
+  }
+  isTransitioningToNextRound.value = false;
+  showMistakeFeedback.value = false;
+  floatingScore.value = 0;
+  showFloatingScore.value = false;
 };
 
 const API_BASE_URL = 'http://localhost:3000'; // APIのベースURL
 
+const showNotificationMessage = (message) => {
+  notificationMessage.value = message;
+  showNotification.value = true;
+  if (notificationTimeoutId) {
+    clearTimeout(notificationTimeoutId);
+  }
+  notificationTimeoutId = setTimeout(() => {
+    showNotification.value = false;
+    notificationTimeoutId = null;
+  }, 5000); // 5秒後に通知を非表示
+};
+
+const loadUnsentScores = () => {
+  const storedScores = JSON.parse(getCookie('unsentScores') || '[]');
+  unsentScoresList.value = storedScores;
+};
+
+const clearUnsentScores = () => {
+  setCookie('unsentScores', '[]');
+  unsentScoresList.value = [];
+  showNotificationMessage('未送信スコアを全て削除しました。');
+};
+
 const submitScoresToRanking = async () => {
+  console.log('Attempting to submit scores to ranking...');
   let unsentScores = JSON.parse(getCookie('unsentScores') || '[]');
-  if (unsentScores.length === 0) return;
+  if (unsentScores.length === 0) {
+    console.log('No unsent scores found.');
+    return;
+  }
+
+  const newUnsentScores = []; // 送信に失敗したスコアを保持する新しい配列
 
   for (const entry of unsentScores) {
     try {
+      console.log('Submitting score entry:', entry);
       const response = await fetch(`${API_BASE_URL}/api/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ player: entry.nickname, score: entry.score, timestamp: entry.date }),
       });
       if (!response.ok) {
-        throw new Error(`Failed to submit score: ${response.status}`);
+        const errorBody = await response.json();
+        console.error(`Failed to submit score for ${entry.nickname}: ${response.status}`, errorBody);
+        newUnsentScores.push(entry); // 送信失敗したスコアは新しい配列に残す
+        showNotificationMessage(`スコアの送信に失敗しました: ${entry.nickname} (${Math.round(entry.score)}). 未送信スコアとして保存されました。`);
+        continue; 
       }
       console.log('Score submitted successfully:', entry);
     } catch (error) {
       console.error('Error submitting score:', error);
-      return; 
+      newUnsentScores.push(entry); // ネットワークエラーなどの場合も新しい配列に残す
+      showNotificationMessage(`スコアの送信に失敗しました: ${entry.nickname} (${Math.round(entry.score)}). 未送信スコアとして保存されました。`);
+      continue; 
     }
   }
-  setCookie('unsentScores', '[]');
+
+  if (newUnsentScores.length < unsentScores.length) {
+    console.log(`Successfully sent ${unsentScores.length - newUnsentScores.length} scores.`);
+  }
+
+  if (newUnsentScores.length > 0) {
+    console.warn(`${newUnsentScores.length} scores failed to send and remain in the queue.`);
+    setCookie('unsentScores', JSON.stringify(newUnsentScores)); // 未送信スコアをCookieに保存
+  } else {
+    console.log('All scores submitted successfully. Clearing unsent scores cookie.');
+    setCookie('unsentScores', '[]'); // 全て送信成功したのでCookieをクリア
+  }
+  loadUnsentScores(); // 未送信スコア表示を更新
 };
 
 const saveNickname = () => {
   playerName.value = newPlayerName.value;
-  setCookie('playerName', playerName.value);
+  if (saveNicknameSetting.value) {
+    setCookie('playerName', playerName.value);
+  } else {
+    // 保存しない場合はCookieから削除
+    setCookie('playerName', '', -1); // 有効期限を過去に設定して削除
+  }
   showNicknameModal.value = false;
 };
 
@@ -449,6 +591,7 @@ const saveSettingsAndCloseModal = () => {
   setCookie('skipOnMistake', skipOnMistake.value); // 新しい設定を保存
   setCookie('audioVolume', audioVolume.value); // 音量を保存
   setCookie('isAudioEnabled', isAudioEnabled.value); // 音声有効/無効を保存
+  setCookie('saveNicknameSetting', saveNicknameSetting.value); // ニックネーム保存設定を保存
   showSettingsModal.value = false;
 };
 
@@ -477,7 +620,14 @@ onMounted(() => {
     isAudioEnabled.value = savedIsAudioEnabled === 'true';
   }
 
-  // submitScoresToRanking(); // サーバーが動いていないためコメントアウト
+  const savedSaveNicknameSetting = getCookie('saveNicknameSetting');
+  if (savedSaveNicknameSetting !== null) {
+    saveNicknameSetting.value = savedSaveNicknameSetting === 'true';
+  }
+
+  loadUnsentScores(); // 未送信スコアをロード
+
+  submitScoresToRanking();
 });
 
 </script>
@@ -510,6 +660,13 @@ onMounted(() => {
   margin: 0;
   font-size: 1.8em;
   font-weight: 700;
+}
+
+.game-logo {
+  height: auto; 
+  max-height: 50px; /* Adjust as needed */
+  object-fit: contain;
+  margin: 0;
 }
 
 .score-display {
@@ -942,5 +1099,78 @@ onMounted(() => {
   margin-top: 10px;
   margin-bottom: 5px;
   color: #FFC107;
+}
+
+/* Notification Overlay */
+.notification-overlay {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 15px 25px;
+  border-radius: 8px;
+  z-index: 3000;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  font-size: 1.1em;
+  transition: opacity 0.5s ease-out;
+}
+
+.notification-overlay.fade-enter-active, .notification-overlay.fade-leave-active {
+  transition: opacity 0.5s;
+}
+.notification-overlay.fade-enter, .notification-overlay.fade-leave-to /* .fade-leave-active in <2.1.8 */ {
+  opacity: 0;
+}
+
+/* Unsent Scores Section */
+.unsent-scores-section {
+  background-color: var(--color-white);
+  padding: 20px;
+  margin-top: 30px;
+  width: 100%;
+  max-width: 400px;
+  text-align: left;
+  border: 1px solid var(--color-border);
+}
+
+.unsent-scores-section h3 {
+  color: var(--color-primary);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.5em;
+}
+
+.unsent-scores-section ul {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 20px;
+  max-height: 200px; /* スクロール可能にする */
+  overflow-y: auto;
+  border: 1px solid #eee;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.unsent-scores-section li {
+  background-color: #f9f9f9;
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  border-radius: 3px;
+  font-size: 0.95em;
+  color: var(--color-text);
+}
+
+.unsent-scores-section .action-button.danger {
+  background-color: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+
+.unsent-scores-section .action-button.danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+  color: white;
 }
 </style>
