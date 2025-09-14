@@ -18,7 +18,7 @@
     <main class="game-main">
       <template v-if="!isGameActive">
         <div class="top-screen">
-          <h2>ようこそ、丸亀カルタへ！</h2>
+          <img src="/丸亀カルタロゴ黒.png" alt="丸亀カルタ ロゴ" class="top-screen-logo" />
           <button @click="startGame" class="action-button primary shadow-md">ゲームスタート</button>
           <button @click="showRankingModal = true" class="action-button shadow-md">ランキングを見る</button>
           <button @click="showSettingsModal = true" class="action-button shadow-md">設定</button>
@@ -168,6 +168,8 @@ import { getCookie, setCookie } from './composables/useCookie';
 import { GAME_CONFIG } from './config/gameConfig';
 import { karutaData } from './data/karutaData.js'; // karutaDataをインポート
 import { useSubtitle } from './composables/useSubtitle.js'; // useSubtitle をインポート
+import logoWhite from '/丸亀カルタロゴ.png';
+import logoBlack from '/丸亀カルタロゴ黒.png';
 
 // --- State --- 
 const cards = ref([]); // 現在表示されている札データ（ゲーム中に減っていく）
@@ -219,9 +221,9 @@ const currentLogoSrc = computed(() => {
   const isLightBackground = headerBgColor === '#ffffff' || headerBgColor === '#f9f9f9' || headerBgColor === 'var(--color-white)' || headerBgColor === '#F0EAD6'; // 例
 
   if (isLightBackground) {
-    return '/丸亀カルタロゴ黒.png';
+    return logoBlack;
   } else {
-    return '/丸亀カルタロゴ.png';
+    return logoWhite;
   }
 });
 
@@ -606,7 +608,7 @@ const goHome = () => {
   showFloatingScore.value = false;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'; // APIのベースURL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://sato-macbook:3000'; // APIのベースURL
 
 const showNotificationMessage = (message) => {
   notificationMessage.value = message;
@@ -1384,5 +1386,12 @@ onMounted(() => {
 
 .modal-content > .action-button {
   margin-top: 30px;
+}
+
+.top-screen-logo {
+  max-width: 80%;
+  height: auto;
+  margin-bottom: 3rem;
+  max-height: 200px;
 }
 </style>
