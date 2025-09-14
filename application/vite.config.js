@@ -5,6 +5,7 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   server: {
+    allowedHosts: ['sato-macbook'],
     proxy: {
       "/api": {
         target: "http://sato-macbook:3000",
